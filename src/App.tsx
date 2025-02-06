@@ -114,6 +114,7 @@ function App() {
   const INITIAL_CLUES = urlParams.get("initialclues");
   const RESTART_SPEED = urlParams.get("restartspeed");
   const WORD_LIST = urlParams.get("wordlist");
+  const DELAY = urlParams.get("delay");
 
   const word = useRef<string>();
   const isGameOver = useRef<boolean>(false);
@@ -124,6 +125,7 @@ function App() {
   const [intervalId, setIntervalId] = useState<number | null>(null);
 
   const clueSpeed = SPEED ? Number(SPEED) * 1000 : 15000;
+  const clueDelay = DELAY ? Number(DELAY) * 1000 : 0;
   const restartSpeed = RESTART_SPEED ? Number(RESTART_SPEED) * 1000 : 5000;
 
   if (!TWITCH_CHANNEL)
@@ -190,7 +192,7 @@ function App() {
         }
         return prev + 1;
       });
-    }, clueSpeed);
+    }, clueSpeed + clueDelay);
 
     setIntervalId(interval);
 
@@ -219,7 +221,7 @@ function App() {
     <div className="game-container">
       <h2>Guess the word!</h2>
       <h3>{displayWord.join(" ")}</h3>
-      {isGameOver.current && <h3 className="congrats">🎉 {winner} guessed correctly! 🎉</h3>}
+      {isGameOver.current ? <h3 className="congrats">🎉 {winner} guessed correctly! 🎉</h3> : <h3></h3>}
     </div>
   );
 }
