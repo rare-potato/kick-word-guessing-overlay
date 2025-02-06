@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import * as tmi from "tmi.js";
-import "./App.css";
 
 const defaultWords = [
   "apple",
@@ -117,9 +116,10 @@ function App() {
   const WORD_LIST = urlParams.get("wordlist");
 
   const word = useRef<string>();
+  const isGameOver = useRef<boolean>(false);
+
   const [displayWord, setDisplayWord] = useState<string[]>([]);
   const [revealedCount, setRevealedCount] = useState<number>(INITIAL_CLUES ? Number(INITIAL_CLUES) : 2);
-  const [isGameOver, setIsGameOver] = useState<boolean>(false);
   const [winner, setWinner] = useState<string>();
   const [intervalId, setIntervalId] = useState<number | null>(null);
 
@@ -151,13 +151,14 @@ function App() {
     });
 
     twitchClient.on("message", (_channel: string, tags: tmi.ChatUserstate, message: string) => {
+      tags.username = Date.now().toString();
       if (!tags.username || !message) return;
-      if (isGameOver) return;
+      if (isGameOver.current) return;
 
       const guess = message.toLowerCase().replace(/[^a-z0-9]/gi, "");
 
       if (guess === word.current!.toLowerCase()) {
-        setIsGameOver(true);
+        isGameOver.current = true;
         setDisplayWord(word.current!.split(""));
 
         if (intervalId !== null) clearInterval(intervalId);
@@ -165,8 +166,6 @@ function App() {
         setWinner(tags.username);
       }
     });
-
-    console.log("test");
 
     initializeGame();
 
@@ -192,7 +191,7 @@ function App() {
     word.current = selectedWord;
 
     setDisplayWord(selectedWord.split("").map((letter, index) => (index < revealedCount ? letter : "_")));
-    setIsGameOver(false);
+    isGameOver.current = false;
     setWinner("");
   };
 
@@ -203,7 +202,7 @@ function App() {
   }, [revealedCount, word]);
 
   useEffect(() => {
-    if (isGameOver) {
+    if (isGameOver.current) {
       const timer = window.setInterval(() => {
         clearInterval(timer);
         initializeGame();
@@ -211,13 +210,13 @@ function App() {
 
       return () => clearInterval(timer);
     }
-  }, [isGameOver]);
+  }, [isGameOver.current]);
 
   return (
     <div className="game-container">
       <h2>Guess the word!</h2>
       <h3>{displayWord.join(" ")}</h3>
-      {isGameOver && <h3 className="congrats">🎉 {winner} guessed correctly! 🎉</h3>}
+      {isGameOver.current && <h3 className="congrats">🎉 {winner} guessed correctly! 🎉</h3>}
     </div>
   );
 }
