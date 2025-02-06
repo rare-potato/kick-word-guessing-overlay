@@ -151,7 +151,6 @@ function App() {
     });
 
     twitchClient.on("message", (_channel: string, tags: tmi.ChatUserstate, message: string) => {
-      tags.username = Date.now().toString();
       if (!tags.username || !message) return;
       if (isGameOver.current) return;
 
@@ -168,11 +167,25 @@ function App() {
     });
 
     initializeGame();
+  }, []);
 
-    const interval = window.setInterval(() => {
+  const initializeGame = () => {
+    if (intervalId) clearInterval(intervalId);
+    const clueCount = INITIAL_CLUES ? Number(INITIAL_CLUES) : 2;
+    setRevealedCount(clueCount);
+
+    const wordlist = WORD_LIST ? WORD_LIST.split(",") : defaultWords;
+
+    const selectedWord: string = wordlist[Math.floor(Math.random() * wordlist.length)];
+    word.current = selectedWord;
+
+    setDisplayWord(selectedWord.split("").map((letter, index) => (index < clueCount ? letter : "_")));
+    isGameOver.current = false;
+
+    const interval = setInterval(() => {
       setRevealedCount((prev) => {
         if (prev >= word.current!.length) {
-          clearInterval(interval);
+          clearInterval(intervalId!);
           return prev;
         }
         return prev + 1;
@@ -181,17 +194,6 @@ function App() {
 
     setIntervalId(interval);
 
-    return () => clearInterval(interval);
-  }, []);
-
-  const initializeGame = () => {
-    const wordlist = WORD_LIST ? WORD_LIST.split(",") : defaultWords;
-
-    const selectedWord: string = wordlist[Math.floor(Math.random() * wordlist.length)];
-    word.current = selectedWord;
-
-    setDisplayWord(selectedWord.split("").map((letter, index) => (index < revealedCount ? letter : "_")));
-    isGameOver.current = false;
     setWinner("");
   };
 
@@ -205,6 +207,7 @@ function App() {
     if (isGameOver.current) {
       const timer = window.setInterval(() => {
         clearInterval(timer);
+        clearInterval(intervalId!);
         initializeGame();
       }, restartSpeed);
 
