@@ -113,7 +113,7 @@ function App() {
   const SPEED = urlParams.get("speed");
   const INITIAL_CLUES = urlParams.get("initialclues");
   const RESTART_SPEED = urlParams.get("restartspeed");
-  const WORD_LIST = urlParams.get("wordlist");
+  const WORD_LIST = urlParams.get("wordlist") ? decodeURIComponent(urlParams.get("wordlist")!) : null;
   const DELAY = urlParams.get("delay");
 
   const word = useRef<string>();
@@ -156,9 +156,11 @@ function App() {
       if (!tags.username || !message) return;
       if (isGameOver.current) return;
 
-      const guess = message.toLowerCase().replace(/[^a-z0-9]/gi, "");
+      if (/[\u0020\uDBC0]/.test(message)) {
+        message = message.slice(0, -3);
+      }
 
-      if (guess === word.current!.toLowerCase()) {
+      if (message === word.current!.toLowerCase()) {
         isGameOver.current = true;
         setDisplayWord(word.current!.split(""));
 
@@ -179,7 +181,7 @@ function App() {
     const wordlist = WORD_LIST ? WORD_LIST.split(",") : defaultWords;
 
     const selectedWord: string = wordlist[Math.floor(Math.random() * wordlist.length)];
-    word.current = selectedWord;
+    word.current = decodeURIComponent(selectedWord);
 
     setDisplayWord(selectedWord.split("").map((letter, index) => (index < clueCount ? letter : "_")));
     isGameOver.current = false;
