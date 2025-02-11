@@ -1,108 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import * as tmi from "tmi.js";
-
-const defaultWords = [
-  "apple",
-  "banana",
-  "cherry",
-  "grapes",
-  "orange",
-  "peanut",
-  "tomato",
-  "butter",
-  "cheese",
-  "potato",
-  "carrot",
-  "pepper",
-  "muffin",
-  "cookie",
-  "donuts",
-  "coffee",
-  "butter",
-  "bottle",
-  "pencil",
-  "marker",
-  "laptop",
-  "tablet",
-  "mobile",
-  "window",
-  "mirror",
-  "guitar",
-  "violin",
-  "drums",
-  "pillow",
-  "cushion",
-  "tissue",
-  "basket",
-  "hanger",
-  "jacket",
-  "sweater",
-  "button",
-  "breeze",
-  "forest",
-  "garden",
-  "rocket",
-  "planet",
-  "cosmos",
-  "galaxy",
-  "shadow",
-  "tunnel",
-  "bridge",
-  "castle",
-  "island",
-  "frozen",
-  "sunset",
-  "desert",
-  "coffin",
-  "turkey",
-  "butter",
-  "pencil",
-  "cloudy",
-  "friend",
-  "school",
-  "pocket",
-  "singer",
-  "artist",
-  "dancer",
-  "writer",
-  "reader",
-  "farmer",
-  "hunter",
-  "driver",
-  "doctor",
-  "lawyer",
-  "baker",
-  "sailor",
-  "hammer",
-  "socket",
-  "branch",
-  "silver",
-  "gadget",
-  "sponge",
-  "anchor",
-  "ladder",
-  "helmet",
-  "ribbon",
-  "flames",
-  "danger",
-  "muscle",
-  "shadow",
-  "wallet",
-  "pebble",
-  "marble",
-  "candle",
-  "jungle",
-  "desert",
-  "winter",
-  "summer",
-  "spring",
-  "autumn",
-  "melody",
-  "garden",
-  "church",
-  "theory",
-  "saddle",
-];
+import { useGetWordList } from "./useGetWordList.tsx";
 
 function App() {
   const initialized = useRef<boolean>(false);
@@ -113,20 +11,24 @@ function App() {
   const SPEED = urlParams.get("speed");
   const INITIAL_CLUES = urlParams.get("initialclues");
   const RESTART_SPEED = urlParams.get("restartspeed");
-  const WORD_LIST = urlParams.get("wordlist") ? decodeURIComponent(urlParams.get("wordlist")!) : null;
   const DELAY = urlParams.get("delay");
 
   const word = useRef<string>();
+  const wordList = useRef<string[] | null>(null);
   const isGameOver = useRef<boolean>(false);
+  const revealedCount = useRef<number>(INITIAL_CLUES ? Number(INITIAL_CLUES) : 2);
+  const intervalIdRef = useRef<number | null>(null);
 
   const [displayWord, setDisplayWord] = useState<string[]>([]);
-  const [revealedCount, setRevealedCount] = useState<number>(INITIAL_CLUES ? Number(INITIAL_CLUES) : 2);
   const [winner, setWinner] = useState<string>();
-  const [intervalId, setIntervalId] = useState<number | null>(null);
+
+  const [wordListInitialized, setWordListInitialized] = useState<boolean>(false);
 
   const clueSpeed = SPEED ? Number(SPEED) * 1000 : 15000;
   const clueDelay = DELAY ? Number(DELAY) * 1000 : 0;
   const restartSpeed = RESTART_SPEED ? Number(RESTART_SPEED) * 1000 : 5000;
+
+  const fetchedWordList = useGetWordList();
 
   if (!TWITCH_CHANNEL)
     return (
@@ -160,64 +62,53 @@ function App() {
         message = message.slice(0, -3);
       }
 
-      if (message === word.current!.toLowerCase()) {
+      if (message.toLowerCase() === word.current!.toLowerCase()) {
         isGameOver.current = true;
         setDisplayWord(word.current!.split(""));
 
-        if (intervalId !== null) clearInterval(intervalId);
+        if (intervalIdRef.current !== null) clearInterval(intervalIdRef.current);
 
         setWinner(tags.username);
+
+        const timer = window.setInterval(() => {
+          clearInterval(timer);
+          initializeGame();
+        }, restartSpeed);
       }
     });
-
-    initializeGame();
   }, []);
 
+  useEffect(() => {
+    if (!fetchedWordList || wordListInitialized) return;
+    setWordListInitialized(true);
+    wordList.current = fetchedWordList;
+
+    initializeGame();
+  }, [fetchedWordList]);
+
   const initializeGame = () => {
-    if (intervalId) clearInterval(intervalId);
+    if (!wordList.current) return;
     const clueCount = INITIAL_CLUES ? Number(INITIAL_CLUES) : 2;
-    setRevealedCount(clueCount);
+    revealedCount.current = clueCount;
 
-    const wordlist = WORD_LIST ? WORD_LIST.split(",") : defaultWords;
-
-    const selectedWord: string = wordlist[Math.floor(Math.random() * wordlist.length)];
+    const selectedWord: string = wordList.current[Math.floor(Math.random() * wordList.current.length)];
     word.current = decodeURIComponent(selectedWord);
 
     setDisplayWord(selectedWord.split("").map((letter, index) => (index < clueCount ? letter : "_")));
     isGameOver.current = false;
 
     const interval = setInterval(() => {
-      setRevealedCount((prev) => {
-        if (prev >= word.current!.length) {
-          clearInterval(intervalId!);
-          return prev;
-        }
-        return prev + 1;
-      });
+      if (revealedCount.current >= word.current!.length) return clearInterval(interval);
+      revealedCount.current += 1;
+
+      setDisplayWord((prev) =>
+        word.current!.split("").map((letter, index) => (index < revealedCount.current ? letter : prev[index] || "_"))
+      );
     }, clueSpeed + clueDelay);
 
-    setIntervalId(interval);
-
+    intervalIdRef.current = interval;
     setWinner("");
   };
-
-  useEffect(() => {
-    setDisplayWord((prev) =>
-      word.current!.split("").map((letter, index) => (index < revealedCount ? letter : prev[index] || "_"))
-    );
-  }, [revealedCount, word]);
-
-  useEffect(() => {
-    if (isGameOver.current) {
-      const timer = window.setInterval(() => {
-        clearInterval(timer);
-        clearInterval(intervalId!);
-        initializeGame();
-      }, restartSpeed);
-
-      return () => clearInterval(timer);
-    }
-  }, [isGameOver.current]);
 
   return (
     <div className="game-container">
