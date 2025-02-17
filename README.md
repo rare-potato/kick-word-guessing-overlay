@@ -1,4 +1,4 @@
-Twitch Word Guessing Overlay
+# Twitch Word Guessing Overlay
 
 A basic word guessing game for Twitch chat to play.
 
