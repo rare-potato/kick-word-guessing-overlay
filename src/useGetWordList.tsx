@@ -116,9 +116,9 @@ export const useGetWordList = () => {
 
       if (WORD_LIST) return setWordList(WORD_LIST.split(","));
 
-      if (!WORD_LIST_URL) setWordList(defaultWords);
+      if (!WORD_LIST_URL) return setWordList(defaultWords);
 
-      const REQUEST = await fetch("https://cors-anywhere.herokuapp.com/" + WORD_LIST_URL);
+      const REQUEST = await fetch("https://corsproxy.io/" + WORD_LIST_URL);
       const wordListText = await REQUEST.text();
 
       setWordList(wordListText.split(","));
