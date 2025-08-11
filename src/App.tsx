@@ -7,7 +7,8 @@ function App() {
 
   const urlParams = new URLSearchParams(window.location.search);
 
-  const TWITCH_CHANNEL = urlParams.get("channel");
+  const CHANNEL = urlParams.get("channel");
+  const WEBSITE = urlParams.get("site");
   const SPEED = urlParams.get("speed");
   const INITIAL_CLUES = urlParams.get("initialclues");
   const RESTART_SPEED = urlParams.get("restartspeed");
@@ -30,53 +31,114 @@ function App() {
 
   const fetchedWordList = useGetWordList();
 
-  if (!TWITCH_CHANNEL)
+  if (!CHANNEL)
     return (
       <>
         You need to put the twitch channel in the url! example:{" "}
-        <a href="https://repo.pogly.gg/wordguesser/?channel=bobross">
-          https://repo.pogly.gg/wordguesser/?channel=bobross
+        <a href="https://repo.pogly.gg/wordguesser/?channel=bobross&site=twitch">
+          https://repo.pogly.gg/wordguesser/?channel=bobross&site=twitch
+        </a>
+        !
+      </>
+    );
+  if (!WEBSITE)
+    return (
+      <>
+        You need to put the website channel in the url! (Kick or Twitch) example:{" "}
+        <a href="https://repo.pogly.gg/wordguesser/?channel=bobross&site=twitch">
+          https://repo.pogly.gg/wordguesser/?channel=bobross&site=twitch
         </a>
         !
       </>
     );
 
   useEffect(() => {
+    const channel: string = CHANNEL.toLowerCase();
     if (initialized.current) return;
     initialized.current = true;
 
-    const twitchChannel: string = TWITCH_CHANNEL.toLowerCase();
-    const twitchClient = tmi.Client({ channels: [twitchChannel] });
+    if (WEBSITE.toLowerCase() == "twitch") {
+      const twitchClient = tmi.Client({ channels: [channel] });
 
-    twitchClient.connect();
+      twitchClient.connect();
 
-    twitchClient.on("connected", () => {
-      console.log("Connected to twitch chat!");
-    });
+      twitchClient.on("connected", () => {
+        console.log("Connected to twitch chat!");
+      });
 
-    twitchClient.on("message", (_channel: string, tags: tmi.ChatUserstate, message: string) => {
-      if (!tags.username || !message) return;
-      if (isGameOver.current) return;
+      twitchClient.on("message", (_channel: string, tags: tmi.ChatUserstate, message: string) => {
+        if (!tags.username || !message) return;
+        if (isGameOver.current) return;
 
-      if (/[\u0020\uDBC0]/.test(message)) {
-        message = message.slice(0, -3);
+        if (/[\u0020\uDBC0]/.test(message)) {
+          message = message.slice(0, -3);
+        }
+
+        if (message.toLowerCase() === word.current!.toLowerCase()) {
+          isGameOver.current = true;
+          setDisplayWord(word.current!.split(""));
+
+          if (intervalIdRef.current !== null) clearInterval(intervalIdRef.current);
+
+          setWinner(tags.username);
+
+          const timer = window.setInterval(() => {
+            clearInterval(timer);
+            initializeGame();
+          }, restartSpeed);
+        }
+      });
+    }
+    else if (WEBSITE.toLowerCase() == "kick") {
+      // Kick setup
+      const wsURL =
+        "wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=8.4.0-rc2&flash=false";
+      let socket: WebSocket;
+
+      async function getKickChatroomID(): Promise<string> {
+        const url = `https://kick.com/api/v2/channels/${channel}/chatroom`;
+        const response = await fetch(url);
+        const data = await response.json();
+        return `chatrooms.${data.id}.v2`;
       }
 
-      if (message.toLowerCase() === word.current!.toLowerCase()) {
-        isGameOver.current = true;
-        setDisplayWord(word.current!.split(""));
+      async function startKickChat() {
+        const chatroom_id = await getKickChatroomID();
+        socket = new WebSocket(wsURL);
 
-        if (intervalIdRef.current !== null) clearInterval(intervalIdRef.current);
+        socket.onopen = () => {
+          const subscribeMsg = JSON.stringify({
+            event: "pusher:subscribe",
+            data: { auth: "", channel: chatroom_id }
+          });
+          socket.send(subscribeMsg);
+        };
 
-        setWinner(tags.username);
+        socket.onmessage = (event) => {
+          try {
+            const parsed = JSON.parse(event.data);
+            if (parsed.event === "App\\Events\\ChatMessageEvent") {
+              const data = JSON.parse(parsed.data);
+              const username = data.sender.username;
+              const message = data.content;
+              if (username && message && !isGameOver.current) {
+                handleGuess(username, message);
+              }
+            }
+          } catch (err) {
+            console.error("Kick message parse error:", err);
+          }
+        };
 
-        const timer = window.setInterval(() => {
-          clearInterval(timer);
-          initializeGame();
-        }, restartSpeed);
+        socket.onerror = (err) => {
+          console.error("Kick WebSocket error:", err);
+        };
       }
-    });
+
+      startKickChat();
+    }
   }, []);
+
 
   useEffect(() => {
     if (!fetchedWordList || wordListInitialized) return;
@@ -85,6 +147,24 @@ function App() {
 
     initializeGame();
   }, [fetchedWordList]);
+
+  const handleGuess = (username: string, message: string) => {
+    if (/[ \uDBC0]/.test(message)) {
+      message = message.slice(0, -3);
+    }
+
+    if (message.toLowerCase() === word.current!.toLowerCase()) {
+      isGameOver.current = true;
+      setDisplayWord(word.current!.split(""));
+      if (intervalIdRef.current !== null) clearInterval(intervalIdRef.current);
+      setWinner(username);
+
+      const timer = window.setInterval(() => {
+        clearInterval(timer);
+        initializeGame();
+      }, restartSpeed);
+    }
+  };
 
   const initializeGame = () => {
     if (!wordList.current) return;
