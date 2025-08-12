@@ -51,7 +51,15 @@ function App() {
         !
       </>
     );
-
+  if (WEBSITE.toLowerCase() !== "twitch" && WEBSITE.toLowerCase() !== "kick") {
+    return (
+      <>
+        <b>Error:</b> The <code>site</code> parameter must be either <code>twitch</code> or <code>kick</code>.<br />
+        You provided: <code>{WEBSITE}</code>
+      </>
+    );
+  }
+  
   useEffect(() => {
     const channel: string = CHANNEL.toLowerCase();
     if (initialized.current) return;
